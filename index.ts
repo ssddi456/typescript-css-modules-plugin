@@ -10,15 +10,15 @@ function getLogger(...args: any[]) {
     const tempLogFile = 'D:/temp/test.log';
     return {
         info(msg: string) {
-            // return;
+            return;
             fs.appendFileSync(tempLogFile, `\n[${new Date}]${msg}`);
         },
         clear() {
-            // return;
+            return;
             fs.unlinkSync(tempLogFile)
         },
         trace(msg) {
-            // return;
+            return;
             this.info(`${msg}
             ${new Error().stack.split('\n').slice(3, 10).join('\n')}`);
         }
