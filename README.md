@@ -11,7 +11,7 @@ This plugin requires TypeScript 2.4 or later. It can provide intellisense in bot
 To use this plugin with VS Code, first install the plugin and a copy of TypeScript in your workspace:
 
 ```bash
-npm install --save-dev git+https://git@github.com/ssddi456/typescript-css-modules-plugins.git typescript
+npm install --save-dev git+https://git@github.com/ssddi456/typescript-css-modules-plugin.git typescript
 ```
 
 Then add a `plugins` section to your [`tsconfig.json`](http://www.typescriptlang.org/docs/handbook/tsconfig-json.html) or [`jsconfig.json`](https://code.visualstudio.com/Docs/languages/javascript#_javascript-project-jsconfigjson)
@@ -21,13 +21,13 @@ Then add a `plugins` section to your [`tsconfig.json`](http://www.typescriptlang
   "compilerOptions": {
     "plugins": [
       {
-        "name": "typescript-css-modules-plugins"
+        "name": "typescript-css-modules-plugin"
       }
     ]
   }
 }
 ```
 
-Finally, run the `Select TypeScript version` command in VS Code to switch to use the workspace version of TypeScript for VS Code's JavaScript and TypeScript language support. You can find more information about managing typescript versions [in the VS Code documentation](https://code.visualstudio.com/Docs/languages/typescript#_using-newer-typescript-versions).
+Finally, run the `Select TypeScript version` command in VS Code to switch to use the workspace version of TypeScript for VS Code's JavaScript and TypeScript language support. Then run the `Restart TS Server` command to reload. You can find more information about managing typescript versions [in the VS Code documentation](https://code.visualstudio.com/Docs/languages/typescript#_using-newer-typescript-versions).
 
 And other editors which support typescript language plugins works like this. See [typescript-styled-plugin](https://github.com/Microsoft/typescript-styled-plugin) for more details.
