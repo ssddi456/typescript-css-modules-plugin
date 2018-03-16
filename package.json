@@ -12,7 +12,8 @@
     "dependencies": {
         "resolve" : "~1.3.3",
         "css-modules-loader-core-sync": "~1.0.0",
-        "@types/node": "latest"
+        "@types/node": "latest",
+        "less": "~3.0.1"
     },
     "peerDependencies": {
         "typescript" : ">=2.7.0"
