@@ -20,7 +20,7 @@ function getLogger(...args: any[]) {
         trace(msg) {
             // return;
             this.info(`${msg}
-            ${new Error().stack.split('\n').slice(3,10).join('\n')}`);
+            ${new Error().stack.split('\n').slice(3, 10).join('\n')}`);
         }
     }
 }
@@ -31,6 +31,13 @@ interface CallHookContext {
 interface BeforeCallHookContext extends CallHookContext {
     override(): void;
 }
+interface DtsRecord {
+    filename: string;
+    content?: string;
+    lastModify: number;
+    update(): void;
+    checkUpdate(mtime: Date): void;
+};
 
 type BeforeCallHook = (context: BeforeCallHookContext) => any;
 type AfterCallHook = (res: any, context: CallHookContext) => any;
@@ -101,33 +108,55 @@ const emptyDts = `
 function init(modules: { typescript: typeof ts_module }) {
     const ts = modules.typescript;
 
-    const cssDtsMap: {
-        [filename: string]: { filename: string, content?: string }
-    } = {};
+    const cssDtsMap: { [filename: string]: DtsRecord } = {};
 
-    const cssMap: {
-        [filename: string]: { filename: string }
-    } = {};
+    const cssMap: { [filename: string]: { filename: string } } = {};
+
+    decorate(fs, 'stat',
+        function ({ args: [filename, callback], override }) {
+            const dtsRecord = cssDtsMap[filename];
+
+            if (dtsRecord) {
+                override();
+                fs.stat(dtsRecord.filename, function (err, stat) {
+                    if (stat) {
+                        const originMtime = stat.mtime;
+
+                        dtsRecord.checkUpdate(originMtime);
+
+                        stat.mtime = new Date(dtsRecord.lastModify);
+                    }
+                    callback(err, stat);
+                });
+            }
+        },
+        null);
 
     decorate(fs, 'statSync',
         function ({ args: [filename], override }) {
-            if (cssDtsMap[filename]) {
+            const dtsRecord = cssDtsMap[filename];
+            if (dtsRecord) {
                 override();
                 const stat = fs.statSync(cssDtsMap[filename].filename);
                 const originMtime = stat.mtime;
-                if (cssDtsMap[filename].content) {
-                    stat.mtime = new Date(originMtime.getTime() + 1);
-                }
+
+                dtsRecord.checkUpdate(originMtime);
+
+
+                stat.mtime = new Date(dtsRecord.lastModify);
+
                 return stat;
             }
         },
         null);
-    
+
     decorate(fs, 'readFileSync',
         function ({ args: [filename], override }) {
-            if (cssDtsMap[filename]) {
+            const dtsRecord = cssDtsMap[filename];
+
+            if (dtsRecord) {
                 override();
-                const dts = cssDtsMap[filename].content;
+                const dts = dtsRecord.content;
 
                 getLogger().trace(`fs.readFileSync ${filename} 
                 ${dts}`);
@@ -136,22 +165,7 @@ function init(modules: { typescript: typeof ts_module }) {
             }
         },
         null);
-    decorate(fs, 'stat',
-        function ({ args: [filename, callback], override }) {
-            if (cssDtsMap[filename]) {
-                override();
-                fs.stat(cssDtsMap[filename].filename, function (err, stat) {
-                    if (stat) {
-                        const originMtime = stat.mtime;
-                        if (cssDtsMap[filename].content) {
-                            stat.mtime = new Date(originMtime.getTime() + 1);
-                        }
-                    }
-                    callback(err, stat);
-                });
-            }
-        },
-        null);
+
 
 
     function create(info: ts_module.server.PluginCreateInfo) {
@@ -189,7 +203,6 @@ function init(modules: { typescript: typeof ts_module }) {
 
             return ret;
         }
-
         decorate(info.languageServiceHost, 'resolveModuleNames',
             null,
             function (res: ts_module.ResolvedModuleFull[], { args: [moduleNames, containingFile] }) {
@@ -217,26 +230,40 @@ function init(modules: { typescript: typeof ts_module }) {
                         };
 
                         if (!cssDtsMap[definitionName]) {
-                            cssDtsMap[definitionName] = {
+                            const dtsRecord: DtsRecord = {
                                 filename: importNamePath,
-                            };
+                                lastModify: 0,
+                                update() {
+                                    // 这里没有明确的强制时序，但是应该不存在race condition 
+                                    new Promise<string>(function (resolve) {
+                                        if (extension == '.less') {
+                                            const lessSource = fs.readFileSync(importNamePath, { encoding: 'utf8' });
+                                            less.render(lessSource, { filename: importNamePath }).then(function (res) {
 
-                            new Promise<string>(function (resolve) {
-                                if (extension == '.less') {
-                                    const lessSource = fs.readFileSync(importNamePath, { encoding: 'utf8' });
-                                    less.render(lessSource, { filename: importNamePath }).then(function (res) {
-                                        
-                                        getLogger().trace(`compiledLessFile ${importNamePath} ${res.css}`);
+                                                getLogger().trace(`compiledLessFile ${importNamePath} ${res.css}`);
 
-                                        resolve(cssSourceToDts(res.css, importNamePath));
+                                                resolve(cssSourceToDts(res.css, importNamePath));
+                                            });
+                                        } else if (extension == '.css') {
+                                            resolve(readCssDtsFile(importNamePath));;
+                                        }
+                                    }).then(function (dtsSource) {
+                                        dtsRecord.content = dtsSource;
+                                        dtsRecord.lastModify += 1;
                                     });
-                                } else if (extension == '.css') {
-                                    resolve(readCssDtsFile(importNamePath));;
+                                },
+                                checkUpdate(originMtime: Date) {
+                                    if (dtsRecord.lastModify) {
+                                        if (originMtime.getTime() > dtsRecord.lastModify) {
+                                            dtsRecord.lastModify = originMtime.getTime();
+                                            dtsRecord.update();
+                                        }
+                                    }
                                 }
-                            }).then(function (dtsSource) {
-                                cssDtsMap[definitionName].content = dtsSource
-                            });
+                            };
+                            dtsRecord.update();
 
+                            cssDtsMap[definitionName] = dtsRecord;
                             cssMap[importNamePath] = {
                                 filename: importNamePath
                             };
