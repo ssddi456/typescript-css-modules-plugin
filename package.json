@@ -11,12 +11,10 @@
     "license": "ISC",
     "dependencies": {
         "resolve" : "~1.3.3",
-        "css-modules-loader-core-sync": "~1.0.0"
+        "css-modules-loader-core-sync": "~1.0.0",
+        "@types/node": "latest"
     },
     "peerDependencies": {
         "typescript" : ">= 2.7.0"
-    },
-    "devDependencies": {
-        "@types/node": "latest"
     }
 }

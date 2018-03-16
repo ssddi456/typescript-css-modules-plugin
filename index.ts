@@ -30,7 +30,7 @@ type BeforeCallHook = (context: BeforeCallHookContext) => any;
 type AfterCallHook = (res: any, context: CallHookContext) => any;
 
 function decorate(host: {}, method: string, before: BeforeCallHook, after: AfterCallHook) {
-    const origin = host[method] as Function;
+    const origin = host[method] as Function & { hooked?: boolean };
     if ('hooked' in origin && origin.hooked) {
         getLogger().info(`hooked method ${method}`);
         return;
@@ -145,8 +145,8 @@ function init(modules: { typescript: typeof ts_module }) {
 
             getLogger().trace(`getDefinitionAtPosition ${util.inspect(originInfo)}`);
 
-            originInfo && originInfo.forEach(function( def ){
-                if(cssDtsMap[def.fileName]) {
+            originInfo && originInfo.forEach(function (def) {
+                if (cssDtsMap[def.fileName]) {
                     def.fileName = cssDtsMap[def.fileName].filename;
                     def.textSpan = {
                         start: 0,
@@ -192,14 +192,14 @@ function init(modules: { typescript: typeof ts_module }) {
                     getLogger().info(`resolveModuleName ${importNamePath} ${exists} exists`);
                 });
             });
-        
+
         decorate(info.project, 'getScriptInfo',
-            function ({ args: [filename], override } ){
-                if( cssMap[filename] ){
+            function ({ args: [filename], override }) {
+                if (cssMap[filename]) {
                     getLogger().info(`project.getScriptInfo `);
                     override();
                     return {
-                        positionToLineOffset(){
+                        positionToLineOffset() {
                             return { line: 1, offset: 1 };
                         }
                     };
