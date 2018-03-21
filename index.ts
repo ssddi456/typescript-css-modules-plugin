@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as resolve from 'resolve';
 import * as SyncCore from 'css-modules-loader-core-sync';
 import * as less from 'less';
+import * as sass from 'sass';
 
 function getLogger(...args: any[]) {
     const tempLogFile = 'D:/temp/test.log';
@@ -41,6 +42,14 @@ interface DtsRecord {
 
 type BeforeCallHook = (context: BeforeCallHookContext) => any;
 type AfterCallHook = (res: any, context: CallHookContext) => any;
+
+const styleExtensions = [
+    '.css',
+    '.less',
+    '.scss',
+    '.sass',
+];
+
 
 function decorate(host: {}, method: string, before: BeforeCallHook, after: AfterCallHook) {
     const origin = host[method] as Function & { hooked?: boolean };
@@ -118,6 +127,8 @@ function init(modules: { typescript: typeof ts_module }) {
 
             if (dtsRecord) {
                 override();
+                getLogger().info(`pull change, ${filename}`);
+
                 fs.stat(dtsRecord.filename, function (err, stat) {
                     if (stat) {
                         const originMtime = stat.mtime;
@@ -219,11 +230,12 @@ function init(modules: { typescript: typeof ts_module }) {
                     const exists = fs.existsSync(importNamePath);
                     const extension = path.extname(importNamePath);
                     if (exists &&
-                        (extension === '.css'
-                            || extension === '.less')
+                        styleExtensions.indexOf(extension) != -1
                     ) {
 
                         const definitionName = importNamePath + ts.Extension.Dts;
+                        const cssFileName = path.basename(importNamePath) + '.css';
+
                         res[i] = {
                             resolvedFileName: definitionName,
                             extension: ts.Extension.Dts,
@@ -234,22 +246,47 @@ function init(modules: { typescript: typeof ts_module }) {
                                 filename: importNamePath,
                                 lastModify: 0,
                                 update() {
+                                    getLogger().info(`getRootFiles ${info.project.getRootFiles()}`);
+
+                                    const source = fs.readFileSync(importNamePath, { encoding: 'utf8' });
+
                                     // 这里没有明确的强制时序，但是应该不存在race condition 
-                                    new Promise<string>(function (resolve) {
+                                    new Promise<string>(function (resolve, reject) {
+
                                         if (extension == '.less') {
-                                            const lessSource = fs.readFileSync(importNamePath, { encoding: 'utf8' });
-                                            less.render(lessSource, { filename: importNamePath }).then(function (res) {
+                                            less.render(source, { filename: importNamePath }).then(function (res) {
 
-                                                getLogger().trace(`compiledLessFile ${importNamePath} ${res.css}`);
+                                                getLogger().info(`compiledLessFile ${importNamePath} ${util.inspect(res)}`);
 
-                                                resolve(cssSourceToDts(res.css, importNamePath));
+                                                resolve(res.css);
+                                            }, function (err) {
+                                                reject(err);
                                             });
+                                        } else if (extension == '.scss' || extension == '.sass') {
+                                            const sassOption = {
+                                                data: source,
+                                                outFile: cssFileName,
+                                                includePaths: ['lib/', 'mod/'],
+                                                indentedSyntax: extension == '.sass',
+                                            };
+
+                                            const res = sass.renderSync(sassOption);
+                                            getLogger().info(`compiledScssFile ${importNamePath} ${util.inspect(res)}`);
+
+                                            resolve(res.css);
                                         } else if (extension == '.css') {
-                                            resolve(readCssDtsFile(importNamePath));;
+                                            resolve(source);
                                         }
-                                    }).then(function (dtsSource) {
+                                    }).then(function (cssSource) {
+                                        const dtsSource = cssSourceToDts(cssSource, importNamePath);
                                         dtsRecord.content = dtsSource;
+
+                                        getLogger().info(`dtsRecord ${importNamePath} updated`);
+                                        
                                         dtsRecord.lastModify += 1;
+                                    }).catch(function(e){
+                                        getLogger().info(`create dts failed ${e}`);
+                                        
                                     });
                                 },
                                 checkUpdate(originMtime: Date) {
