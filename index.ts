@@ -266,7 +266,7 @@ function init(modules: { typescript: typeof ts_module }) {
                                             const sassOption = {
                                                 data: source,
                                                 outFile: cssFileName,
-                                                includePaths: ['lib/', 'mod/'],
+                                                includePaths: [path.dirname(importNamePath), ...info.project.getRootFiles().map(x => path.dirname)],
                                                 indentedSyntax: extension == '.sass',
                                             };
 
